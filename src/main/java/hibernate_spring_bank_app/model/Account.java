@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 @EqualsAndHashCode(of = "id")
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @Table(name = "accounts",schema = "hibernate-spring-bank")
 @Entity
 public class Account {
@@ -24,7 +25,9 @@ public class Account {
     @ManyToOne
     @JoinColumn(name = "user_id")
     private User user;
+
     @DecimalMin(value = "0.00")
+    @Column(name = "money_amount")
     private BigDecimal moneyAmount;
 
     @Override

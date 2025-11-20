@@ -11,6 +11,7 @@ import java.util.List;
 @EqualsAndHashCode(of = "id")
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @Table(name = "users",schema = "hibernate-spring-bank")
 @Entity
 public class User {

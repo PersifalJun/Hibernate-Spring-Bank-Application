@@ -1,8 +1,8 @@
 package hibernate_spring_bank_app.service;
 
-
 import hibernate_spring_bank_app.exceptions.*;
-import hibernate_spring_bank_app.model.*;
+import hibernate_spring_bank_app.model.Account;
+import hibernate_spring_bank_app.model.User;
 import hibernate_spring_bank_app.ref.AccountRefUser;
 import hibernate_spring_bank_app.repository.AccountRepository;
 import jakarta.validation.constraints.DecimalMin;
@@ -14,71 +14,61 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
 import java.math.BigDecimal;
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 
-@Transactional
+import static java.util.Objects.isNull;
+
 @Validated
 @Service
 public class AccountService {
     private final AccountRepository accountRepository;
     private final AccountRefUser accountRefUser;
-
     @Value("${account.transfer-commission}")
     private BigDecimal commission;
     @Value("${account.default-amount}")
     private BigDecimal moneyAmount;
 
     @Autowired
-    public AccountService(AccountRepository accountRepository, AccountRefUser accountRefUser) {
+    public AccountService(AccountRepository accountRepository,
+                          AccountRefUser accountRefUser) {
         this.accountRepository = accountRepository;
         this.accountRefUser = accountRefUser;
     }
 
-    public void createAccount(@NotNull Long userId) {
-        if (!accountRepository.getUserAccountsMap().containsKey(userId)) {
-            throw new NoUserException("Невозможно создать аккаунт для несуществующего пользователя");
-        }
-        Long accountId = accountRepository.getUserAccountsMap().values().stream().
-                filter(Objects::nonNull).
-                flatMap(Collection::stream).
-                map(Account::getId).
-                filter(Objects::nonNull).
-                mapToLong(Long::longValue).
-                max().orElse(0L) + 1L;
-//        accountRepository.save(userId, new Account(accountId, userId, moneyAmount)); -> Я изменил userId на User в Account.class
+    @Transactional
+    public void createAccount(@NotNull Long userid) {
+
+        User user = accountRefUser.findUserById(userid);
+        Account account = Account.builder()
+                .moneyAmount(moneyAmount)
+                .user(user)
+                .build();
+
+        accountRepository.save(account);
     }
 
+    @Transactional
     public void closeAccount(@NotNull Long accountId) {
-        Account accountToDelete = accountRepository.findById(accountId);
-        List<Account> accounts = null;
-        Long userId = null;
-        for (Map.Entry<Long, List<Account>> entry : accountRepository.getUserAccountsMap().entrySet()) {
-            if (entry.getValue().contains(accountToDelete)) {
-                accounts = entry.getValue();
-                userId = entry.getKey();
-            }
-        }
-        @NotNull List<Account> finalAccounts = accounts;
+        Account accountToClose = accountRepository.findById(accountId)
+                .orElseThrow(() -> new NoAccountException("Не найден аккаунт для удаления"));
 
-        try {
-            checkAccountListSizeEqualsOne(finalAccounts);
-            checkAccountSizeIsEmpty(finalAccounts);
-            checkFirstAccountCanNotBeClosed(finalAccounts, accountId);
-            Account firstAccount = accountRepository.findById(finalAccounts.get(0).getId());
-            firstAccount.setMoneyAmount(firstAccount.getMoneyAmount().add(accountToDelete.getMoneyAmount()));
-            printAccountClosed(accountId);
-            try {
-                accountRepository.deleteById(userId, accountId);
-            } catch (RuntimeException ex) {
-                throw new NoAccountException("Не найден аккаунт для удаления");
-            }
-
-        } catch (NotEnoughAccountsException | FirstAccountClosedException ex) {
-            System.out.println(ex.getMessage());
+        User userWhoCloseAccount = accountToClose.getUser();
+        if (isNull(userWhoCloseAccount)) {
+            throw new NoUserException("Не найден пользователь для закрытия аккаунта!");
         }
+
+        List<Account> accountsForUserWhoCloseAccount = userWhoCloseAccount.getAccountList();
+
+        checkAccountListSizeEqualsOne(accountsForUserWhoCloseAccount);
+        checkAccountSizeIsEmpty(accountsForUserWhoCloseAccount);
+        checkFirstAccountCanNotBeClosed(accountsForUserWhoCloseAccount, accountId);
+
+        Account firstAccount = userWhoCloseAccount.getAccountList().getFirst();
+        BigDecimal firstAccountMoney = firstAccount.getMoneyAmount().add(accountToClose.getMoneyAmount());
+        updateAccountMoney(firstAccount, firstAccountMoney);
+
+        printAccountClosed(accountId);
+        accountRepository.deleteById(accountId);
     }
 
     private void checkAccountListSizeEqualsOne(List<Account> accounts) {
@@ -88,65 +78,79 @@ public class AccountService {
     }
 
     private void checkAccountSizeIsEmpty(List<Account> accounts) {
-        if (accounts.isEmpty()) {
+        if (isNull(accounts) || accounts.isEmpty()) {
             throw new NotEnoughAccountsException("У пользователя нет счетов");
         }
     }
 
     private void checkFirstAccountCanNotBeClosed(List<Account> accounts, Long accountId) {
-        if (accounts.get(0).getId().equals(accountId)) {
+        if (accounts.getFirst().getId().equals(accountId)) {
             throw new FirstAccountClosedException("Нельзя закрыть первый аккаунт пользователя");
         }
     }
 
+    @Transactional
     public void makeDeposit(@NotNull Long accountId,
                             @DecimalMin(value = "10.00") BigDecimal sum) {
-        Account accountToMakeDeposit = accountRepository.findById(accountId);
-        accountToMakeDeposit.setMoneyAmount(accountToMakeDeposit.getMoneyAmount().add(sum));
+
+        Account accountToMakeDeposit;
+
+        accountToMakeDeposit = accountRepository.findById(accountId)
+                .orElseThrow(() -> new NoAccountException("Не найден аккаунт для внесения депозита"));
+
+
+        BigDecimal sumAfterDeposit = accountToMakeDeposit.getMoneyAmount().add(sum);
+        updateAccountMoney(accountToMakeDeposit, sumAfterDeposit);
         printCurrentAmountMoney(accountToMakeDeposit);
     }
 
+    @Transactional
     public void transfer(@NotNull Long accountIdSender,
                          @NotNull Long accountIdRecipient,
                          @DecimalMin(value = "10.00") BigDecimal sum) {
         Account senderAccount;
         Account recipientAccount;
 
-        try {
-            senderAccount = accountRepository.findById(accountIdSender);
-        } catch (RuntimeException ex) {
-            throw new NoAccountException("Не найден аккаунт отправителя");
-        }
-        try {
-            recipientAccount = accountRepository.findById(accountIdRecipient);
-        } catch (RuntimeException ex) {
-            throw new NoAccountException("Не найден аккаунт получателя");
-        }
-        User sender = accountRefUser.identifyUserByAccount(senderAccount);
-        User recipient = accountRefUser.identifyUserByAccount(recipientAccount);
 
-        try{
-            checkAccountEqualsRecipientAccount(senderAccount,recipientAccount);
-            checkNotEnoughMoneyToTransfer(senderAccount,sum);
-            checkSenderAccountEqualsRecipient(sender,recipient);
-            recipientAccount.setMoneyAmount(recipientAccount.getMoneyAmount().add(sum.subtract(commission)));
-            senderAccount.setMoneyAmount(senderAccount.getMoneyAmount().subtract(sum));
-            printCurrentAmountMoney(senderAccount);
-        }catch(IdenticalAccountException | NotEnoughMoneyException | SameSenderException  ex){
-            System.out.println(ex.getMessage());
+        senderAccount = accountRepository.findById(accountIdSender).
+                orElseThrow(() -> new NoAccountException("Не найден аккаунт отправителя"));
+
+        recipientAccount = accountRepository.findById(accountIdRecipient).
+                orElseThrow(() -> new NoAccountException("Не найден аккаунт получателя"));
+
+
+        User sender = senderAccount.getUser();
+        if (isNull(sender)) {
+            throw new NoUserException("Не найден пользователь-отправитель");
         }
+
+        User recipient = recipientAccount.getUser();
+        if (isNull(recipient)) {
+            throw new NoUserException("Не найден пользователь-получатель");
+        }
+
+        checkAccountEqualsRecipientAccount(senderAccount, recipientAccount);
+        checkNotEnoughMoneyToTransfer(senderAccount, sum);
+        checkSenderAccountEqualsRecipient(sender, recipient);
+
+        BigDecimal updatedSenderAccountMoney = senderAccount.getMoneyAmount().subtract(sum);
+        updateAccountMoney(senderAccount, updatedSenderAccountMoney);
+
+        BigDecimal updatedRecipientAccountMoney = recipientAccount.getMoneyAmount().add(sum.subtract(commission));
+        updateAccountMoney(recipientAccount, updatedRecipientAccountMoney);
+
+        printCurrentAmountMoney(senderAccount);
+
     }
     private void checkAccountEqualsRecipientAccount(Account senderAccount,Account recipientAccount){
         if (senderAccount.equals(recipientAccount)) {
             throw new IdenticalAccountException("Счета аккаунтов идентичны");
         }
-
     }
     private void checkNotEnoughMoneyToTransfer(Account senderAccount,BigDecimal sum){
         if (senderAccount.getMoneyAmount().compareTo(sum) < 0) {
             throw new NotEnoughMoneyException("Недостаточно средств для перевода!");
         }
-
     }
     private void checkSenderAccountEqualsRecipient(User sender,User recipient){
         if (sender.getId().equals(recipient.getId())) {
@@ -155,21 +159,30 @@ public class AccountService {
 
     }
 
+    @Transactional
     public void withdraw(@NotNull Long accountId, @DecimalMin(value = "10.00") BigDecimal sum) {
-        Account accountToWithdraw = accountRepository.findById(accountId);
+        Account accountToWithdraw = accountRepository.findById(accountId).
+                orElseThrow(() -> new NoAccountException("Не найден аккаунт для снятия средств"));
         if (accountToWithdraw.getMoneyAmount().compareTo(sum) < 0) {
-            throw new NotEnoughMoneyException("Недостаточно средств для снятия средств!");
+            throw new NotEnoughMoneyException("Недостаточно средств для снятия средств");
         } else {
-            accountToWithdraw.setMoneyAmount(accountToWithdraw.getMoneyAmount().subtract(sum));
+            BigDecimal updatedAccountMoneyAfterWithdraw = accountToWithdraw.getMoneyAmount().subtract(sum);
+            updateAccountMoney(accountToWithdraw, updatedAccountMoneyAfterWithdraw);
             printCurrentAmountMoney(accountToWithdraw);
         }
     }
 
-    private void printCurrentAmountMoney(Account senderAccount) {
-        System.out.println("Текущее кол-во средств для аккаунта отправителя: " + senderAccount.getMoneyAmount());
+    private void printCurrentAmountMoney(Account account) {
+        System.out.println("Текущее кол-во средств на аккаунте id=" +
+                account.getId() + ": " + account.getMoneyAmount());
     }
 
     private void printAccountClosed(Long accountId) {
         System.out.println("Аккаунт закрыт c id: " + accountId + " закрыт");
     }
+
+    private void updateAccountMoney(Account account, BigDecimal sum) {
+        account.setMoneyAmount(sum);
+    }
+
 }

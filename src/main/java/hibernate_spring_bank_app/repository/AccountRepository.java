@@ -1,53 +1,49 @@
 package hibernate_spring_bank_app.repository;
 
-
 import hibernate_spring_bank_app.exceptions.NoAccountException;
-import hibernate_spring_bank_app.exceptions.NoUserException;
 import hibernate_spring_bank_app.model.Account;
 import jakarta.validation.constraints.NotNull;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.validation.annotation.Validated;
 
-import java.util.*;
+import java.util.Optional;
+
+
 
 @Validated
 @Repository
 public class AccountRepository {
-    private final Map<Long, List<Account>> userAccountsMap;
+    private final SessionFactory sessionFactory;
 
-    public AccountRepository() {
-        this.userAccountsMap = new HashMap<>();
+    @Autowired
+    public AccountRepository(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
+
     }
 
-    public void save(@NotNull Long userId, Account account) {
-        if (Objects.isNull(account)) {
-            throw new NoAccountException("Аккаунт не найден!");
+    public void save(Account account) {
+        getCurrentSession().persist(account);
+    }
+
+    public Optional<Account> findById(@NotNull Long accountId) {
+        return Optional.ofNullable(getCurrentSession().get(Account.class, accountId));
+    }
+
+    public void deleteById(@NotNull Long accountId) {
+        int updated = getCurrentSession()
+                .createQuery("delete from Account a where a.id = :id")
+                .setParameter("id", accountId)
+                .executeUpdate();
+
+        if (updated == 0) {
+            throw new NoAccountException("Аккаунт не найден для удаления");
         }
-        else if(!userAccountsMap.containsKey(userId)){
-            throw new NoUserException("Нет пользователя для добавления аккаунта!");
-        }
-        else {
-            userAccountsMap.get(userId).add(account);
-        }
     }
 
-    public Account findById(@NotNull Long accountId) {
-        return userAccountsMap.values().stream().
-                filter(Objects::nonNull).
-                flatMap(Collection::stream).
-                filter(account -> Objects.equals(account.getId(), accountId)).findFirst().
-                orElseThrow(() -> new NoAccountException("Аккаунт не найден"));
-    }
-
-    public void deleteById(@NotNull Long userId, @NotNull Long accountId) {
-        List<Account> userAccounts = userAccountsMap.get(userId);
-        Account accountToDelete = userAccounts.stream().
-                filter(account -> Objects.equals(account.getId(), accountId)).
-                findFirst().orElseThrow(() -> new NoAccountException("Аккаунт не найден"));
-        userAccounts.remove(accountToDelete);
-    }
-
-    public Map<Long, List<Account>> getUserAccountsMap() {
-        return userAccountsMap;
+    public Session getCurrentSession() {
+        return sessionFactory.getCurrentSession();
     }
 }

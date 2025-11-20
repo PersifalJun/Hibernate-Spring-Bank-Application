@@ -40,9 +40,11 @@ public class HibernateConfiguration {
                 .setProperty("hibernate.connection.password", dbPassword)
                 .setProperty("hibernate.show_sql", "true")
                 .setProperty("hibernate.format_sql", "true")
-                .setProperty("hibernate.hbm2ddl.auto", "update")
+                .setProperty("hibernate.hbm2ddl.auto", "create-drop")
                 .setProperty("hibernate.current_session_context_class", "org.springframework.orm.hibernate5.SpringSessionContext");
 
         return configuration.buildSessionFactory();
     }
+
+
 }
