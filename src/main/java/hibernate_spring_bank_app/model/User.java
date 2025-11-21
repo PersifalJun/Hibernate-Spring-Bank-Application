@@ -1,5 +1,6 @@
 package hibernate_spring_bank_app.model;
 
+import hibernate_spring_bank_app.model.account.Account;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -17,7 +18,6 @@ import java.util.List;
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @NotNull(message = "Идентификатор пользователя не может быть null")
     private Long id;
 
     @NotBlank(message = "Логин пользователя не может быть пустым")
@@ -34,7 +34,7 @@ public class User {
         return "User{" +
                 "id=" + id +
                 ", login='" + login + '\'' +
-                ", accountList=" + accountList +
+                ", accountsCount=" + (accountList != null ? accountList.size() : 0) +
                 '}';
     }
 }

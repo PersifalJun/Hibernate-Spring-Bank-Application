@@ -1,10 +1,9 @@
 package hibernate_spring_bank_app.repository;
 
-import hibernate_spring_bank_app.exceptions.NoUserException;
 import hibernate_spring_bank_app.model.User;
+import hibernate_spring_bank_app.util.SessionProvider;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import org.hibernate.Session;
-import org.hibernate.SessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.validation.annotation.Validated;
@@ -16,37 +15,32 @@ import java.util.Optional;
 @Repository
 public class UserRepository {
 
-    private final SessionFactory sessionFactory;
-
+    private final SessionProvider sessionProvider;
     @Autowired
-    public UserRepository(SessionFactory sessionFactory) {
-        this.sessionFactory = sessionFactory;
+    public UserRepository(SessionProvider sessionProvider) {
+        this.sessionProvider = sessionProvider;
     }
 
     public void save(User user) {
-        getCurrentSession().persist(user);
+        sessionProvider.getCurrentSession().persist(user);
     }
 
     public List<User> getUsers() {
-        return getCurrentSession().createQuery("SELECT u FROM User u",User.class)
-                .list();
+        return sessionProvider.getCurrentSession().createQuery("SELECT u FROM User u", User.class)
+                .getResultList();
     }
 
     public Optional<User> findById(@NotNull Long userId) {
-        return getCurrentSession()
+        return sessionProvider.getCurrentSession()
                 .createQuery("SELECT u FROM User u WHERE u.id = :id ",User.class)
                 .setParameter("id",userId)
                 .uniqueResultOptional();
     }
-
-    public void deleteById(@NotNull Long userId) {
-        getCurrentSession().createQuery("DELETE FROM User u WHERE u.id = : id")
-                .setParameter("id",userId);
-
+    public Optional<User> findByLogin(@NotBlank String login) {
+        return sessionProvider.getCurrentSession()
+                .createQuery("SELECT u FROM User u WHERE u.login = :login ",User.class)
+                .setParameter("login",login)
+                .uniqueResultOptional();
     }
 
-
-    private Session getCurrentSession(){
-        return sessionFactory.getCurrentSession();
-    }
 }

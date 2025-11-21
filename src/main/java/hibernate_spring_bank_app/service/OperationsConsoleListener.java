@@ -1,9 +1,9 @@
 package hibernate_spring_bank_app.service;
 
-import hibernate_spring_bank_app.exceptions.*;
-import hibernate_spring_bank_app.model.*;
 import hibernate_spring_bank_app.commands.Commands;
-import hibernate_spring_bank_app.ref.AccountRefUser;
+import hibernate_spring_bank_app.exceptions.*;
+import hibernate_spring_bank_app.model.User;
+import hibernate_spring_bank_app.repository.ref.AccountRefUser;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -25,7 +25,6 @@ public class OperationsConsoleListener {
         this.userService = userService;
         this.accountRefUser = accountRefUser;
     }
-
 
     public void start() {
         Thread consoleThread = new Thread(this::runConsole, "console-loop");
@@ -52,7 +51,6 @@ public class OperationsConsoleListener {
                     System.out.println("Выход");
                     running = false;
                     continue;
-
                 }
                 Commands commands;
                 try {
@@ -106,28 +104,36 @@ public class OperationsConsoleListener {
     private void createUser() {
         String login = scanner.nextLine();
         try {
-            User newUser = userService.createUser(login).orElseThrow(()->new NoUserException("Пользователь не найден!"));
-            accountRefUser.addNewUserToAccountsMap(newUser);
-            System.out.println("Пользователь с логином: " + newUser.getLogin() + " создан");
-        } catch (ConstraintViolationException | RegistryException ex) {
+            User newUser = userService.createUser(login)
+                    .orElseThrow(() -> new NoUserException("Не удалось создать пользователя"));
+            printUserCreated(newUser);
+        } catch (ConstraintViolationException | RegistryException | NoUserException ex) {
             System.out.println(ex.getMessage());
         }
     }
 
+    private void printUserCreated(User user) {
+        System.out.println("Пользователь с логином: " + user.getLogin() + " создан");
+    }
+
     private void showAllUsers() {
-        userService.showAllUsers().forEach(System.out::println);
+        userService.showAllUsers();
     }
 
     private void createAccount() {
         try {
             Long userId = Long.parseLong(scanner.nextLine());
             accountService.createAccount(userId);
-            System.out.println("Аккаунт создан для пользователя с id " + userId);
+            printAccountCreated(userId);
         } catch (ConstraintViolationException | NoUserException | NoAccountException ex) {
             System.out.println(ex.getMessage());
         } catch (NumberFormatException ex) {
             System.out.println("Неправильный формат ввода id");
         }
+    }
+
+    private void printAccountCreated(Long userId) {
+        System.out.println("Аккаунт для пользователя с id: " + userId + " создан");
     }
 
     private void closeAccount() {
@@ -161,7 +167,7 @@ public class OperationsConsoleListener {
             Long recipientId = Long.parseLong(scanner.nextLine());
             BigDecimal sum = new BigDecimal(scanner.nextLine().trim());
             accountService.transfer(senderId, recipientId, sum);
-        } catch (ConstraintViolationException |
+        } catch (ConstraintViolationException | SameSenderException |
                  NotEnoughAccountsException | NoAccountException ex) {
             System.out.println(ex.getMessage());
         } catch (NumberFormatException ex) {

@@ -1,10 +1,11 @@
 package hibernate_spring_bank_app.service;
 
 import hibernate_spring_bank_app.exceptions.*;
-import hibernate_spring_bank_app.model.Account;
 import hibernate_spring_bank_app.model.User;
-import hibernate_spring_bank_app.ref.AccountRefUser;
+import hibernate_spring_bank_app.model.account.Account;
+import hibernate_spring_bank_app.model.account.Tag;
 import hibernate_spring_bank_app.repository.AccountRepository;
+import hibernate_spring_bank_app.repository.ref.AccountRefUser;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,7 @@ public class AccountService {
         Account account = Account.builder()
                 .moneyAmount(moneyAmount)
                 .user(user)
+                .tag(Tag.SECONDARY)
                 .build();
 
         accountRepository.save(account);
@@ -51,21 +53,24 @@ public class AccountService {
     public void closeAccount(@NotNull Long accountId) {
         Account accountToClose = accountRepository.findById(accountId)
                 .orElseThrow(() -> new NoAccountException("Не найден аккаунт для удаления"));
-
+        checkFirstAccountCanNotBeClosed(accountToClose);
         User userWhoCloseAccount = accountToClose.getUser();
         if (isNull(userWhoCloseAccount)) {
-            throw new NoUserException("Не найден пользователь для закрытия аккаунта!");
+            throw new NoUserException("Не найден пользователь для закрытия аккаунта");
         }
 
         List<Account> accountsForUserWhoCloseAccount = userWhoCloseAccount.getAccountList();
 
         checkAccountListSizeEqualsOne(accountsForUserWhoCloseAccount);
         checkAccountSizeIsEmpty(accountsForUserWhoCloseAccount);
-        checkFirstAccountCanNotBeClosed(accountsForUserWhoCloseAccount, accountId);
 
-        Account firstAccount = userWhoCloseAccount.getAccountList().getFirst();
+        Account firstAccount = accountsForUserWhoCloseAccount.stream()
+                .filter(account -> account.getTag() == Tag.FIRST)
+                .findFirst()
+                .orElseThrow(() -> new NoAccountException("Аккаунт не найден"));
+
         BigDecimal firstAccountMoney = firstAccount.getMoneyAmount().add(accountToClose.getMoneyAmount());
-        updateAccountMoney(firstAccount, firstAccountMoney);
+        accountRepository.updateAccountMoney(firstAccount, firstAccountMoney);
 
         printAccountClosed(accountId);
         accountRepository.deleteById(accountId);
@@ -83,8 +88,8 @@ public class AccountService {
         }
     }
 
-    private void checkFirstAccountCanNotBeClosed(List<Account> accounts, Long accountId) {
-        if (accounts.getFirst().getId().equals(accountId)) {
+    private void checkFirstAccountCanNotBeClosed(Account account) {
+        if (account.getTag().equals(Tag.FIRST)) {
             throw new FirstAccountClosedException("Нельзя закрыть первый аккаунт пользователя");
         }
     }
@@ -100,7 +105,7 @@ public class AccountService {
 
 
         BigDecimal sumAfterDeposit = accountToMakeDeposit.getMoneyAmount().add(sum);
-        updateAccountMoney(accountToMakeDeposit, sumAfterDeposit);
+        accountRepository.updateAccountMoney(accountToMakeDeposit, sumAfterDeposit);
         printCurrentAmountMoney(accountToMakeDeposit);
     }
 
@@ -134,10 +139,10 @@ public class AccountService {
         checkSenderAccountEqualsRecipient(sender, recipient);
 
         BigDecimal updatedSenderAccountMoney = senderAccount.getMoneyAmount().subtract(sum);
-        updateAccountMoney(senderAccount, updatedSenderAccountMoney);
+        accountRepository.updateAccountMoney(senderAccount, updatedSenderAccountMoney);
 
         BigDecimal updatedRecipientAccountMoney = recipientAccount.getMoneyAmount().add(sum.subtract(commission));
-        updateAccountMoney(recipientAccount, updatedRecipientAccountMoney);
+        accountRepository.updateAccountMoney(recipientAccount, updatedRecipientAccountMoney);
 
         printCurrentAmountMoney(senderAccount);
 
@@ -156,19 +161,22 @@ public class AccountService {
         if (sender.getId().equals(recipient.getId())) {
             throw new SameSenderException("Нельзя осуществлять перевод средств между своими счетами!");
         }
-
     }
 
     @Transactional
     public void withdraw(@NotNull Long accountId, @DecimalMin(value = "10.00") BigDecimal sum) {
         Account accountToWithdraw = accountRepository.findById(accountId).
                 orElseThrow(() -> new NoAccountException("Не найден аккаунт для снятия средств"));
-        if (accountToWithdraw.getMoneyAmount().compareTo(sum) < 0) {
+        checkAccountMoneyNotZero(accountToWithdraw, sum);
+        BigDecimal updatedAccountMoneyAfterWithdraw = accountToWithdraw.getMoneyAmount().subtract(sum);
+        accountRepository.updateAccountMoney(accountToWithdraw, updatedAccountMoneyAfterWithdraw);
+        printCurrentAmountMoney(accountToWithdraw);
+
+    }
+
+    private void checkAccountMoneyNotZero(Account account, BigDecimal sum) {
+        if (account.getMoneyAmount().compareTo(sum) < 0) {
             throw new NotEnoughMoneyException("Недостаточно средств для снятия средств");
-        } else {
-            BigDecimal updatedAccountMoneyAfterWithdraw = accountToWithdraw.getMoneyAmount().subtract(sum);
-            updateAccountMoney(accountToWithdraw, updatedAccountMoneyAfterWithdraw);
-            printCurrentAmountMoney(accountToWithdraw);
         }
     }
 
@@ -180,9 +188,4 @@ public class AccountService {
     private void printAccountClosed(Long accountId) {
         System.out.println("Аккаунт закрыт c id: " + accountId + " закрыт");
     }
-
-    private void updateAccountMoney(Account account, BigDecimal sum) {
-        account.setMoneyAmount(sum);
-    }
-
 }

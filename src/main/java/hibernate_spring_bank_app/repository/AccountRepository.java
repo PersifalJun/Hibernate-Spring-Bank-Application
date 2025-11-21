@@ -1,27 +1,25 @@
 package hibernate_spring_bank_app.repository;
 
 import hibernate_spring_bank_app.exceptions.NoAccountException;
-import hibernate_spring_bank_app.model.Account;
+import hibernate_spring_bank_app.model.account.Account;
+import hibernate_spring_bank_app.util.SessionProvider;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.Session;
-import org.hibernate.SessionFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.util.Optional;
-
-
 
 @Validated
 @Repository
 public class AccountRepository {
-    private final SessionFactory sessionFactory;
+    private final SessionProvider sessionProvider;
 
     @Autowired
-    public AccountRepository(SessionFactory sessionFactory) {
-        this.sessionFactory = sessionFactory;
-
+    public AccountRepository(SessionProvider sessionProvider) {
+        this.sessionProvider = sessionProvider;
     }
 
     public void save(Account account) {
@@ -41,9 +39,20 @@ public class AccountRepository {
         if (updated == 0) {
             throw new NoAccountException("Аккаунт не найден для удаления");
         }
+
     }
 
     public Session getCurrentSession() {
-        return sessionFactory.getCurrentSession();
+        return sessionProvider.getCurrentSession();
+    }
+
+    public void updateAccountMoney(Account account, BigDecimal sum) {
+        Session currentSession = sessionProvider.getCurrentSession();
+        getCurrentSession().createQuery("UPDATE Account a SET a.moneyAmount = :money " +
+                        "WHERE a.id = :id")
+                .setParameter("money", sum)
+                .setParameter("id", account.getId())
+                .executeUpdate();
+        currentSession.refresh(account);
     }
 }

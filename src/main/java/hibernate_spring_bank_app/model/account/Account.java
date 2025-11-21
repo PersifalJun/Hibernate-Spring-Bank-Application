@@ -1,5 +1,6 @@
-package hibernate_spring_bank_app.model;
+package hibernate_spring_bank_app.model.account;
 
+import hibernate_spring_bank_app.model.User;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -18,7 +19,6 @@ import java.math.BigDecimal;
 public class Account {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @NotNull(message = "ID аккаунта не может быть null!")
     private Long id;
 
     @NotNull(message = "Аккаунт должен быть привязан к пользователю!")
@@ -30,11 +30,15 @@ public class Account {
     @Column(name = "money_amount")
     private BigDecimal moneyAmount;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tag")
+    private Tag tag;
+
     @Override
     public String toString() {
         return "Account{" +
                 "id=" + id +
-                ", userId=" + user+
+                ", userId=" + (user != null ? user.getId() : null) +
                 ", moneyAmount=" + moneyAmount +
                 '}';
     }
