@@ -1,4 +1,4 @@
-package hibernate_spring_bank_app.util;
+package hibernate_spring_bank_app.provider;
 
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;

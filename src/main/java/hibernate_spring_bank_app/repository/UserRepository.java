@@ -1,7 +1,7 @@
 package hibernate_spring_bank_app.repository;
 
 import hibernate_spring_bank_app.model.User;
-import hibernate_spring_bank_app.util.SessionProvider;
+import hibernate_spring_bank_app.provider.SessionProvider;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +16,7 @@ import java.util.Optional;
 public class UserRepository {
 
     private final SessionProvider sessionProvider;
+
     @Autowired
     public UserRepository(SessionProvider sessionProvider) {
         this.sessionProvider = sessionProvider;
@@ -32,15 +33,15 @@ public class UserRepository {
 
     public Optional<User> findById(@NotNull Long userId) {
         return sessionProvider.getCurrentSession()
-                .createQuery("SELECT u FROM User u WHERE u.id = :id ",User.class)
-                .setParameter("id",userId)
-                .uniqueResultOptional();
-    }
-    public Optional<User> findByLogin(@NotBlank String login) {
-        return sessionProvider.getCurrentSession()
-                .createQuery("SELECT u FROM User u WHERE u.login = :login ",User.class)
-                .setParameter("login",login)
+                .createQuery("SELECT u FROM User u WHERE u.id = :id ", User.class)
+                .setParameter("id", userId)
                 .uniqueResultOptional();
     }
 
+    public Optional<User> findByLogin(@NotBlank String login) {
+        return sessionProvider.getCurrentSession()
+                .createQuery("SELECT u FROM User u WHERE u.login = :login ", User.class)
+                .setParameter("login", login)
+                .uniqueResultOptional();
+    }
 }

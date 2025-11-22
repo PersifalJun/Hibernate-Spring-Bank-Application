@@ -35,7 +35,6 @@ public class AccountRefUser {
                 .user(user)
                 .tag(Tag.FIRST)
                 .build();
-
     }
     public void saveFirstUserAccount(Account account){
         accountRepository.save(account);

@@ -1,8 +1,9 @@
 package hibernate_spring_bank_app.repository;
 
-import hibernate_spring_bank_app.exceptions.NoAccountException;
+import hibernate_spring_bank_app.exceptions.NotDeletedAccount;
+import hibernate_spring_bank_app.exceptions.NotUpdatedAccountMoney;
 import hibernate_spring_bank_app.model.account.Account;
-import hibernate_spring_bank_app.util.SessionProvider;
+import hibernate_spring_bank_app.provider.SessionProvider;
 import jakarta.validation.constraints.NotNull;
 import org.hibernate.Session;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,36 +24,34 @@ public class AccountRepository {
     }
 
     public void save(Account account) {
-        getCurrentSession().persist(account);
+        sessionProvider.getCurrentSession().persist(account);
     }
 
     public Optional<Account> findById(@NotNull Long accountId) {
-        return Optional.ofNullable(getCurrentSession().get(Account.class, accountId));
+        return Optional.ofNullable(sessionProvider.getCurrentSession().get(Account.class, accountId));
     }
 
     public void deleteById(@NotNull Long accountId) {
-        int updated = getCurrentSession()
+        int updated = sessionProvider.getCurrentSession()
                 .createQuery("delete from Account a where a.id = :id")
                 .setParameter("id", accountId)
                 .executeUpdate();
 
         if (updated == 0) {
-            throw new NoAccountException("Аккаунт не найден для удаления");
+            throw new NotDeletedAccount("Аккаунт не был удален");
         }
-
-    }
-
-    public Session getCurrentSession() {
-        return sessionProvider.getCurrentSession();
     }
 
     public void updateAccountMoney(Account account, BigDecimal sum) {
         Session currentSession = sessionProvider.getCurrentSession();
-        getCurrentSession().createQuery("UPDATE Account a SET a.moneyAmount = :money " +
+        int updated = sessionProvider.getCurrentSession().createQuery("UPDATE Account a SET a.moneyAmount = :money " +
                         "WHERE a.id = :id")
                 .setParameter("money", sum)
                 .setParameter("id", account.getId())
                 .executeUpdate();
+        if (updated == 0) {
+            throw new NotUpdatedAccountMoney("Счёт пользователя не обновлен");
+        }
         currentSession.refresh(account);
     }
 }

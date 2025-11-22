@@ -16,7 +16,6 @@ public class ConfigurationProperties {
     public static MethodValidationPostProcessor methodValidationPostProcessor() {
         return new MethodValidationPostProcessor();
     }
-
     @Bean
     public Validator validator() {
         return new LocalValidatorFactoryBean();
