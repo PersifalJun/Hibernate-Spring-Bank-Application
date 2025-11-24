@@ -32,10 +32,7 @@ public class UserRepository {
     }
 
     public Optional<User> findById(@NotNull Long userId) {
-        return sessionProvider.getCurrentSession()
-                .createQuery("SELECT u FROM User u WHERE u.id = :id ", User.class)
-                .setParameter("id", userId)
-                .uniqueResultOptional();
+        return Optional.ofNullable(sessionProvider.getCurrentSession().get(User.class, userId));
     }
 
     public Optional<User> findByLogin(@NotBlank String login) {
