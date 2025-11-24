@@ -27,8 +27,7 @@ public class UserRepository {
     }
 
     public List<User> getUsers() {
-        return sessionProvider.getCurrentSession().createQuery("SELECT u FROM User u", User.class)
-                .getResultList();
+        return sessionProvider.getCurrentSession().createQuery("from User",User.class).getResultList();
     }
 
     public Optional<User> findById(@NotNull Long userId) {
@@ -37,7 +36,7 @@ public class UserRepository {
 
     public Optional<User> findByLogin(@NotBlank String login) {
         return sessionProvider.getCurrentSession()
-                .createQuery("SELECT u FROM User u WHERE u.login = :login ", User.class)
+                .createQuery("from User u WHERE u.login = :login ", User.class)
                 .setParameter("login", login)
                 .uniqueResultOptional();
     }
