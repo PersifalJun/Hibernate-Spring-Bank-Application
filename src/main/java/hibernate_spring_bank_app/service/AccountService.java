@@ -5,7 +5,7 @@ import hibernate_spring_bank_app.model.User;
 import hibernate_spring_bank_app.model.account.Account;
 import hibernate_spring_bank_app.model.account.Tag;
 import hibernate_spring_bank_app.repository.AccountRepository;
-import hibernate_spring_bank_app.repository.ref.AccountRefUser;
+import hibernate_spring_bank_app.repository.UserRepository;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +25,7 @@ import static java.util.Objects.isNull;
 @Service
 public class AccountService {
     private final AccountRepository accountRepository;
-    private final AccountRefUser accountRefUser;
+    private final UserRepository userRepository;
     @Value("${account.transfer-commission}")
     private BigDecimal commission;
     @Value("${account.default-amount}")
@@ -33,21 +33,22 @@ public class AccountService {
 
     @Autowired
     public AccountService(AccountRepository accountRepository,
-                          AccountRefUser accountRefUser) {
+                          UserRepository userRepository) {
         this.accountRepository = accountRepository;
-        this.accountRefUser = accountRefUser;
+        this.userRepository = userRepository;
     }
 
     @Transactional
     public void createAccount(@NotNull Long userid) {
         log.info("Создание дополнительного аккаунта для пользователя id={}", userid);
-        User user = accountRefUser.findUserById(userid);
+        User user = userRepository.findById(userid)
+                .orElseThrow(() -> new NoUserException("Пользователь не найден"));
         Account account = Account.builder()
                 .moneyAmount(moneyAmount)
                 .user(user)
                 .tag(Tag.SECONDARY)
                 .build();
-
+        user.getAccountList().add(account);
         accountRepository.save(account);
         log.info("Аккаунт создан для пользователя id={}", userid);
     }
@@ -87,6 +88,7 @@ public class AccountService {
         accountRepository.updateAccountMoney(firstAccount, firstAccountMoney);
 
         printAccountClosed(accountId);
+        userWhoCloseAccount.removeAccount(accountToClose);
         accountRepository.deleteById(accountId);
         log.info("Аккаунт id={} успешно закрыт", accountId);
     }
@@ -177,6 +179,7 @@ public class AccountService {
                 accountIdSender, updatedSenderAccountMoney, accountIdRecipient, updatedRecipientAccountMoney);
         printCurrentAmountMoney(senderAccount);
 
+        throw new NotUpdatedAccountMoney("Не удалось выполнить перевод средств");
     }
     private void checkAccountEqualsRecipientAccount(Account senderAccount,Account recipientAccount){
         if (senderAccount.equals(recipientAccount)) {

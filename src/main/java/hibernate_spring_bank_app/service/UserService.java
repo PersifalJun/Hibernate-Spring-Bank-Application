@@ -3,15 +3,17 @@ package hibernate_spring_bank_app.service;
 import hibernate_spring_bank_app.exceptions.RegistryException;
 import hibernate_spring_bank_app.model.User;
 import hibernate_spring_bank_app.model.account.Account;
+import hibernate_spring_bank_app.model.account.Tag;
 import hibernate_spring_bank_app.repository.UserRepository;
-import hibernate_spring_bank_app.repository.ref.AccountRefUser;
 import jakarta.validation.constraints.NotBlank;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Optional;
 
@@ -20,12 +22,13 @@ import java.util.Optional;
 @Service
 public class UserService {
     private final UserRepository userRepository;
-    private final AccountRefUser accountRefUser;
+
+    @Value("${account.default-amount}")
+    private BigDecimal moneyAmount;
 
     @Autowired
-    public UserService(UserRepository userRepository, AccountRefUser accountRefUser) {
+    public UserService(UserRepository userRepository) {
         this.userRepository = userRepository;
-        this.accountRefUser = accountRefUser;
     }
     @Transactional(readOnly = true)
     public void showAllUsers() {
@@ -41,9 +44,15 @@ public class UserService {
                 .login(login)
                 .accountList(new ArrayList<>())
                 .build();
-        Account firstAccount = accountRefUser.createFirstUserAccount(user);
+
+        Account firstAccount = Account.builder()
+                .moneyAmount(moneyAmount)
+                .user(user)
+                .tag(Tag.FIRST)
+                .build();
+        user.addAccount(firstAccount);
         userRepository.save(user);
-        accountRefUser.saveFirstUserAccount(firstAccount);
+
         log.info("Пользователь с логином={} успешно создан, id={}", login, user.getId());
         return Optional.of(user);
     }

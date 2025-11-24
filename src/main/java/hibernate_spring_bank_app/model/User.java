@@ -28,8 +28,19 @@ public class User {
     private String login;
 
     @NotNull(message = "Аккаунты пользователя не могут быть null")
-    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Account> accountList;
+
+
+    public void addAccount(Account account) {
+        accountList.add(account);
+        account.setUser(this);
+    }
+
+    public void removeAccount(Account account) {
+        accountList.remove(account);
+        account.setUser(null);
+    }
 
     @Override
     public String toString() {
